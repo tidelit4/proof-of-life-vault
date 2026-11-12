@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Fetch dependencies
+        run: |
+          git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+          git clone --depth 1 https://github.com/Reactive-Network/reactive-lib-omni lib/reactive-lib-omni
+          git -C lib/forge-std log -1 --format='forge-std %H %cI'
+          git -C lib/reactive-lib-omni log -1 --format='reactive-lib-omni %H %cI'
+          ls -R lib/reactive-lib-omni/src
+
+      - name: Versions
+        run: forge --version
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test -vv
+
+      - name: Gas report
+        run: forge test --gas-report | tail -n 80
+
+      # Deploy dry run against a LOCAL anvil fork of Lasna (real system-contract code, no real
+      # transactions, no real funds). Uses anvil's well-known public test key on the fork only.
+      - name: Deploy dry run on local Lasna fork
+        continue-on-error: true
+        env:
+          PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          BENEFICIARY: "0x000000000000000000000000000000000000bEEF"
+        run: |
+          anvil --fork-url https://lasna-rpc.rnk.dev/ --port 8545 --silent &
+          sleep 8
+          cast chain-id --rpc-url http://127.0.0.1:8545
+          cast code 0x8888888888888888888888888888888888888888 --rpc-url http://127.0.0.1:8545 | cut -c1-80
+          forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast -vvv

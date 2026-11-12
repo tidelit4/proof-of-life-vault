@@ -1,0 +1,112 @@
+name: deploy-cross
+
+# Manual only. Cross-chain TESTNET deployment: DemoToken + ProofOfLifeVault on Ethereum Sepolia
+# (origin and destination), ProofOfLifeReactive on Reactive Lasna. Throwaway testnet key in the
+# repo secret PRIVATE_KEY. Nothing here touches a mainnet.
+on:
+  workflow_dispatch:
+    inputs:
+      beneficiary:
+        description: "Beneficiary address"
+        required: true
+      inactivity:
+        description: "INACTIVITY_SECS"
+        default: "300"
+      grace:
+        description: "GRACE_SECS"
+        default: "300"
+      retry:
+        description: "RETRY_SECS"
+        default: "300"
+      cron_topic:
+        description: "Cron topic0 (default Cron100)"
+        default: "0xb49937fb8970e19fd46d48f7e3fb00d659deac0347f79cd7cb542f0fc1503c70"
+      any_token:
+        description: "ANY_TOKEN (true = watch every token the owner sends on Sepolia)"
+        default: "false"
+      reactive_fund:
+        description: "lREACT for the reactive contract"
+        default: "0.5ether"
+      vault_gas:
+        description: "SepETH the vault keeps for callback fees"
+        default: "0.0005ether"
+      vault_deposit:
+        description: "SepETH principal"
+        default: "0.0002ether"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+      SEP: https://ethereum-sepolia-rpc.publicnode.com
+      LASNA: https://lasna-rpc.rnk.dev/
+      SEP_PROXY: "0xAa14d9Cd0f788Ca23d11805986C1d8bd035D23b4"
+      BENEFICIARY: ${{ inputs.beneficiary }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Fetch dependencies
+        run: |
+          git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
+          git clone --depth 1 https://github.com/Reactive-Network/reactive-lib-omni lib/reactive-lib-omni
+
+      - name: Build
+        run: forge build
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          OWNER=$(cast wallet address --private-key "$PRIVATE_KEY")
+          echo "owner $OWNER"
+          echo "sepolia chain $(cast chain-id --rpc-url $SEP), balance $(cast balance $OWNER --rpc-url $SEP --ether)"
+          echo "lasna chain $(cast chain-id --rpc-url $LASNA), balance $(cast balance $OWNER --rpc-url $LASNA --ether)"
+          mkdir -p deploy-out
+
+          # 1. Sepolia: DemoToken (owner activity source)
+          TOKEN=$(forge create src/DemoToken.sol:DemoToken --rpc-url $SEP --private-key "$PRIVATE_KEY" --broadcast --json \
+            --constructor-args $OWNER 1000000000000000000000000 | jq -r .deployedTo)
+          echo "DemoToken (Sepolia) $TOKEN"
+          if [ "${{ inputs.any_token }}" = "true" ]; then WATCH=0x0000000000000000000000000000000000000000; else WATCH=$TOKEN; fi
+
+          # 2. Lasna: reactive contract, origin = destination = Sepolia, cron on Lasna
+          CFG="($OWNER,11155111,$WATCH,11155111,${{ inputs.cron_topic }},${{ inputs.inactivity }},${{ inputs.grace }},${{ inputs.retry }},0)"
+          RC=$(forge create src/ProofOfLifeReactive.sol:ProofOfLifeReactive --rpc-url $LASNA --private-key "$PRIVATE_KEY" --broadcast --json \
+            --value ${{ inputs.reactive_fund }} --constructor-args "$CFG" | jq -r .deployedTo)
+          echo "ProofOfLifeReactive (Lasna) $RC"
+
+          # 3. Sepolia: vault (callback contract) authorising exactly RC through the Sepolia callback proxy
+          VAULT=$(forge create src/ProofOfLifeVault.sol:ProofOfLifeVault --rpc-url $SEP --private-key "$PRIVATE_KEY" --broadcast --json \
+            --value ${{ inputs.vault_gas }} \
+            --constructor-args $SEP_PROXY $RC $OWNER $BENEFICIARY $TOKEN ${{ inputs.inactivity }} ${{ inputs.grace }} | jq -r .deployedTo)
+          echo "ProofOfLifeVault (Sepolia) $VAULT"
+
+          # 4. Lasna: arm (subscriptions + clock)
+          cast send $RC "setVault(address)" $VAULT --rpc-url $LASNA --private-key "$PRIVATE_KEY" --json | jq '{tx: .transactionHash, status}'
+
+          # 5. Sepolia: demo principal (native + 100 DMO)
+          cast send $VAULT "deposit()" --value ${{ inputs.vault_deposit }} --rpc-url $SEP --private-key "$PRIVATE_KEY" --json | jq '{tx: .transactionHash, status}'
+          cast send $TOKEN "approve(address,uint256)" $VAULT 100000000000000000000 --rpc-url $SEP --private-key "$PRIVATE_KEY" --json | jq '{tx: .transactionHash, status}'
+          sleep 15  # the load-balanced RPC can lag one block behind the approve
+          cast send $VAULT "depositToken(uint256)" 100000000000000000000 --rpc-url $SEP --private-key "$PRIVATE_KEY" --json | jq '{tx: .transactionHash, status}'
+
+          jq -n --arg token $TOKEN --arg rc $RC --arg vault $VAULT --arg owner $OWNER --arg b $BENEFICIARY \
+            '{token:$token, reactive:$rc, vault:$vault, owner:$owner, beneficiary:$b, origin:11155111, destination:11155111}' | tee deploy-out/addrs.json
+
+      - name: Collect ABIs
+        if: always()
+        run: |
+          mkdir -p deploy-out/abi
+          for c in DemoToken ProofOfLifeVault ProofOfLifeReactive; do
+            jq '.abi' out/$c.sol/$c.json > deploy-out/abi/$c.json || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deploy-out
+          path: deploy-out

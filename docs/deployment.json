@@ -1,0 +1,18 @@
+{
+ "token": "0x4F9aA7e938D181710cE7f2e579Abd7282889794f",
+ "reactive": "0xFB02A93f9d425e60d50eA6E516B2b8a713dd6Df0",
+ "vault": "0x37e6A46f964b16F40A3961d58D5876b7Bc537612",
+ "beneficiary": "0xEb2c71293CdBe0ce5a9CcA9a2C236B521B25eE06",
+ "owner": "0xB295f4667215Db43E677DFfC5010065CAB667936",
+ "tokenChain": 11155111,
+ "vaultChain": 11155111,
+ "reactiveChain": 5318007,
+ "deployRun": 43320117556,
+ "setup_txs": {
+  "setVault_lasna": "0x72cca7abe2f4af42cd8ed22860d5a89f1f0114a610f189dfd106c56ac43601d1",
+  "deposit": "0x7b1aee68ea8e6092ca0f7be717a7fd0ebf0eb2dfc7831b67d2d909b1f02883ba",
+  "approve": "0xe0aad2db1a09966f98a5baa3c1a3f6bdd52b8d9c2334b0ffb8dd2b3b769884eb",
+  "depositToken": "0x5ef7ad51b4fa1115925bbe6568d3365ea4a2c6304de1140544991c95c01ecff0"
+ },
+ "previous_v1_gas300k": {"token": "0xe1d7F9Aa904672E790911E1D5FfF64CaD8425f0d", "reactive": "0xE0Bef825dDf0Cc77BdC29bA5b90BB67414DDa401", "vault": "0xf0b1a0D1738C9FC842FdA0C04Cc827F3b880273B", "status": "retired: warn/release callbacks failed at gasLimit 300k; cancelled 0x2d2b767b9426964482b3302319e36f7f77fb4d3d7f3b69eceacd528d5287a415"}
+}
