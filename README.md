@@ -48,6 +48,19 @@ went through loops A → B → D → B → C, and every step is below. Each call
 | 22:47:12 | Sepolia | 12121903 | `Released` | callback: principal + tokens paid to the beneficiary | [`0x7b58f72c…`](https://sepolia.etherscan.io/tx/0x7b58f72ce0dbd999c00b0ef7096131b94766d1491d426840be5102b0de234b72) |
 | 22:47:13 | Lasna | 8199111 | `Closed` | react(): vault's Released log seen, all subscriptions dropped | [`0x4193a465…`](https://lasna.reactscan.net/tx/0x4193a465d1d9654c4975061d02a655cb8f585ec94d9d5ba1c7ab99705a74efb2) |
 
+### Left running with production settings
+
+A second instance runs the "set it and forget it" configuration and is left on: a 30-day inactivity
+window, a 30-day grace period, Cron10000 ticks (about every 3 hours), and `ANY_TOKEN=true`, so every
+ERC-20/721 transfer the owner sends on Sepolia counts as proof of life. It was deployed 2026-11-12
+22:52Z, and its first heartbeat was delivered at once.
+
+| Contract | Chain | Address |
+|---|---|---|
+| ProofOfLifeVault | Ethereum Sepolia | [`0x9B499c8e1CFb49de7707309Ed555596180D3B761`](https://sepolia.etherscan.io/address/0x9B499c8e1CFb49de7707309Ed555596180D3B761) |
+| ProofOfLifeReactive | Reactive Lasna | [`0xE42A0F1AC2045311E2BDCDf4D47611e6A3820c9B`](https://lasna.reactscan.net/address/0xE42A0F1AC2045311E2BDCDf4D47611e6A3820c9B) |
+| DemoToken | Ethereum Sepolia | [`0xE42A0F1AC2045311E2BDCDf4D47611e6A3820c9B`](https://sepolia.etherscan.io/address/0xE42A0F1AC2045311E2BDCDf4D47611e6A3820c9B) (same address as the reactive contract on Lasna: same deployer nonce on both chains) |
+
 Video (2 min, silent with captions): [`docs/demo.mp4`](docs/demo.mp4). Raw event dump: [`docs/transactions.json`](docs/transactions.json).
 
 
